@@ -100,52 +100,85 @@ function Tower({ position = [0, 0, 0], quality }) {
         )}
       </mesh>
 
-      {/* vertical gold corner pilasters — catch light and define the silhouette */}
-      {[
-        [1, 1],
-        [1, -1],
-        [-1, 1],
-        [-1, -1],
-      ].map(([sx, sz], i) => (
-        <mesh key={i} position={[sx * baseW * 0.5, towerH / 2 + 0.4, sz * baseW * 0.5]}>
-          <boxGeometry args={[0.09, towerH, 0.09]} />
-          <meshStandardMaterial
-            color={GOLD}
-            metalness={1}
-            roughness={0.3}
-            emissive={GOLD}
-            emissiveIntensity={0.55}
-          />
-        </mesh>
-      ))}
+      {/* vertical gold corner pilasters — catch light and define the silhouette.
+          One instancedMesh for all four: 4 draw calls would be 1. */}
+      <instancedMesh
+        ref={(m) => {
+          if (!m) return
+          const corners = [
+            [1, 1],
+            [1, -1],
+            [-1, 1],
+            [-1, -1],
+          ]
+          corners.forEach(([sx, sz], i) => {
+            dummy.position.set(sx * baseW * 0.5, towerH / 2 + 0.4, sz * baseW * 0.5)
+            dummy.rotation.set(0, 0, 0)
+            dummy.updateMatrix()
+            m.setMatrixAt(i, dummy.matrix)
+          })
+          m.instanceMatrix.needsUpdate = true
+        }}
+        args={[null, null, 4]}
+      >
+        <boxGeometry args={[0.09, towerH, 0.09]} />
+        <meshStandardMaterial
+          color={GOLD}
+          metalness={1}
+          roughness={0.3}
+          emissive={GOLD}
+          emissiveIntensity={0.55}
+        />
+      </instancedMesh>
 
-      {/* horizontal floor plates — make the storey rhythm readable */}
-      {Array.from({ length: floors }).map((_, i) => (
-        <mesh key={`f${i}`} position={[0, 0.4 + i * floorH, 0]}>
-          <boxGeometry args={[baseW * 1.035, 0.055, baseW * 1.035]} />
-          <meshStandardMaterial
-            color="#c8b389"
-            metalness={0.7}
-            roughness={0.4}
-            emissive="#5a4a22"
-            emissiveIntensity={0.7}
-          />
-        </mesh>
-      ))}
+      {/* horizontal floor plates — make the storey rhythm readable.
+          Instanced: `floors` draw calls collapse to 1. */}
+      <instancedMesh
+        ref={(m) => {
+          if (!m) return
+          for (let i = 0; i < floors; i++) {
+            dummy.position.set(0, 0.4 + i * floorH, 0)
+            dummy.rotation.set(0, 0, 0)
+            dummy.updateMatrix()
+            m.setMatrixAt(i, dummy.matrix)
+          }
+          m.instanceMatrix.needsUpdate = true
+        }}
+        args={[null, null, floors]}
+      >
+        <boxGeometry args={[baseW * 1.035, 0.055, baseW * 1.035]} />
+        <meshStandardMaterial
+          color="#c8b389"
+          metalness={0.7}
+          roughness={0.4}
+          emissive="#5a4a22"
+          emissiveIntensity={0.7}
+        />
+      </instancedMesh>
 
-      {/* gold banding every 4 floors */}
-      {Array.from({ length: bands }).map((_, i) => (
-        <mesh key={i} position={[0, 0.4 + i * floorH * 4, 0]}>
-          <boxGeometry args={[baseW * 1.06, 0.08, baseW * 1.06]} />
-          <meshStandardMaterial
-            color={GOLD}
-            metalness={1}
-            roughness={0.25}
-            emissive={GOLD}
-            emissiveIntensity={0.45}
-          />
-        </mesh>
-      ))}
+      {/* gold banding every 4 floors — instanced too */}
+      <instancedMesh
+        ref={(m) => {
+          if (!m) return
+          for (let i = 0; i < bands; i++) {
+            dummy.position.set(0, 0.4 + i * floorH * 4, 0)
+            dummy.rotation.set(0, 0, 0)
+            dummy.updateMatrix()
+            m.setMatrixAt(i, dummy.matrix)
+          }
+          m.instanceMatrix.needsUpdate = true
+        }}
+        args={[null, null, bands]}
+      >
+        <boxGeometry args={[baseW * 1.06, 0.08, baseW * 1.06]} />
+        <meshStandardMaterial
+          color={GOLD}
+          metalness={1}
+          roughness={0.25}
+          emissive={GOLD}
+          emissiveIntensity={0.45}
+        />
+      </instancedMesh>
 
       {/* illuminated windows */}
       <instancedMesh
@@ -226,6 +259,7 @@ function Monolith({ scale = 1 }) {
  * ------------------------------------------------------------------ */
 function CityCluster({ position, scale = 1 }) {
   const ref = useRef()
+  const dummy = useMemo(() => new THREE.Object3D(), [])
   const towers = useMemo(
     () =>
       Array.from({ length: 22 }).map((_, i) => {
@@ -247,18 +281,35 @@ function CityCluster({ position, scale = 1 }) {
   })
   return (
     <group ref={ref} position={position} scale={scale}>
-      {towers.map((t, i) => (
-        <mesh key={i} position={t.pos}>
-          <boxGeometry args={[t.w, t.h, t.w]} />
-          <meshStandardMaterial
-            color={t.gold ? '#4a3f22' : '#141821'}
-            metalness={0.85}
-            roughness={0.3}
-            emissive={t.gold ? GOLD : '#0a0d14'}
-            emissiveIntensity={t.gold ? 0.5 : 1}
-          />
-        </mesh>
-      ))}
+      {/* one instancedMesh for the whole skyline: 22 draw calls collapse to 1 */}
+      <instancedMesh
+        ref={(m) => {
+          if (!m) return
+          towers.forEach((t, i) => {
+            dummy.position.set(...t.pos)
+            dummy.rotation.set(0, 0, 0)
+            dummy.scale.set(t.w, t.h, t.w)
+            dummy.updateMatrix()
+            m.setMatrixAt(i, dummy.matrix)
+            m.setColorAt(
+              i,
+              new THREE.Color(t.gold ? '#7a6435' : '#1a2030'),
+            )
+          })
+          m.instanceMatrix.needsUpdate = true
+          if (m.instanceColor) m.instanceColor.needsUpdate = true
+        }}
+        args={[null, null, towers.length]}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial
+          vertexColors
+          metalness={0.85}
+          roughness={0.3}
+          emissive="#161b28"
+          emissiveIntensity={0.8}
+        />
+      </instancedMesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
         <circleGeometry args={[7, 40]} />
         <meshStandardMaterial color="#080a0f" metalness={0.7} roughness={0.5} />

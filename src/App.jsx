@@ -1,6 +1,10 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
-import Scene from './scene/Scene.jsx'
-import { detectQuality } from './scene/quality.js'
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react'
+import { detectQuality, hasWebGL } from './scene/quality.js'
+import SceneBoundary from './scene/SceneBoundary.jsx'
+
+/* The 3D scene pulls in three.js (~1MB). Load it lazily so the page shell,
+   hero copy and navigation paint immediately instead of waiting on it. */
+const Scene = lazy(() => import('./scene/Scene.jsx'))
 import './App.css'
 
 /* Base-relative asset prefix so the site works when served from a
@@ -246,10 +250,12 @@ function ContactSection({ innerRef }) {
   )
 }
 
+const YEAR = new Date().getFullYear()
+
 function Footer() {
   return (
     <footer className="footer">
-      <span>© {new Date().getFullYear()} SOBHA Limited</span>
+      <span>© {YEAR} SOBHA Limited</span>
       <span>CIN: L45201KA1995PLC018475</span>
       <div className="footer-links">
         <a href="https://www.sobha.com/blog/">Blog</a>
@@ -267,8 +273,9 @@ export default function App() {
   const [frac, setFrac] = useState(0)
   // detected once, synchronously, so the 3D renderer is never rebuilt
   const [quality] = useState(detectQuality)
+  // no WebGL => never download the 1MB 3D bundle at all
+  const [webgl] = useState(hasWebGL)
   const [activeProject, setActiveProject] = useState(0)
-  const raf = useRef(0)
   const sectionRefs = useRef([])
 
   /* Map scroll position onto the scene's stations using the real measured
@@ -287,8 +294,8 @@ export default function App() {
     const start = els[idx].offsetTop
     const end = idx + 1 < els.length ? els[idx + 1].offsetTop : start + vh
     const f = Math.max(0, Math.min(1, (y - start) / Math.max(1, end - start)))
-    setStation(idx)
-    setFrac(f)
+    setStation((prev) => (prev === idx ? prev : idx))
+    setFrac((prev) => (Math.abs(prev - f) < 0.002 ? prev : f))
   }, [])
 
   const registerSection = useCallback(
@@ -300,24 +307,49 @@ export default function App() {
 
   useEffect(() => {
     onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', onScroll)
+    // Throttle with rAF: a scroll event fires on every pixel of travel, and
+    // each one triggers a React re-render of the whole scene tree. Coalescing
+    // to one update per frame is what keeps scrolling smooth.
+    let queued = false
+    const onScrollRaf = () => {
+      if (queued) return
+      queued = true
+      requestAnimationFrame(() => {
+        queued = false
+        onScroll()
+      })
+    }
+    window.addEventListener('scroll', onScrollRaf, { passive: true })
+    window.addEventListener('resize', onScrollRaf)
     return () => {
-      window.removeEventListener('scroll', onScroll)
-      window.removeEventListener('resize', onScroll)
+      window.removeEventListener('scroll', onScrollRaf)
+      window.removeEventListener('resize', onScrollRaf)
     }
   }, [onScroll])
 
   return (
     <div className="app">
-      <Scene
-        station={station}
-        frac={frac}
-        projects={PROJECTS}
-        quality={quality}
-        activeProject={activeProject}
-        onSelectProject={setActiveProject}
-      />
+      {/* The 3D layer is strictly additive. If WebGL is missing, the chunk
+          fails to load, or the driver resets, the page keeps all of its
+          content and drops only the 3D backdrop. */}
+      {webgl ? (
+        <SceneBoundary
+          fallback={<div className="stage stage-fallback" aria-hidden="true" />}
+        >
+          <Suspense fallback={<div className="stage stage-loading" aria-hidden="true" />}>
+            <Scene
+              station={station}
+              frac={frac}
+              projects={PROJECTS}
+              quality={quality}
+              activeProject={activeProject}
+              onSelectProject={setActiveProject}
+            />
+          </Suspense>
+        </SceneBoundary>
+      ) : (
+        <div className="stage stage-fallback" aria-hidden="true" />
+      )}
       <Nav />
       <main>
         <Hero innerRef={registerSection(0)} />

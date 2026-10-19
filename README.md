@@ -1,16 +1,64 @@
-# React + Vite
+# SOBHA — 3D redesign
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A scroll-driven 3D redesign of [sobha.com](https://www.sobha.com) built with
+React 19, Vite and react-three-fiber.
 
-Currently, two official plugins are available:
+**Live:** https://fsix7115-arch.github.io/sobha-3d/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## What's in here
 
-## React Compiler
+- **Real content harvested from the source site** — 30 project images, actual
+  project names, all 14 cities, the company timeline and the real stats.
+  Nothing is placeholder lorem.
+- **Five scroll stations** laid out along -Z. The camera lerps between them
+  as you scroll; the DOM sections stay the scroll spine (no scroll-jacking),
+  so anchor links and text selection keep working.
+- **Quality tiering** — the GPU is detected before the first render and the
+  scene scales to it. `PerformanceMonitor` lowers the pixel ratio further if
+  the frame rate can't hold.
+- **Graceful degradation** — no WebGL, a failed chunk, or a driver reset
+  drops the 3D backdrop and leaves a fully readable, CSS-only page.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Stack
 
-## Expanding the Oxlint configuration
+| Package | Version |
+|---------|---------|
+| three | 0.186 |
+| @react-three/fiber | 9.8 |
+| @react-three/drei | 10.7 |
+| react | 19.3 |
+| vite | 8.3 |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Local development
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # -> dist/
+npm run preview
+```
+
+## Deploying to Vercel
+
+**Via the dashboard:** import this repo, and Vercel detects the Vite preset
+(build `npm run build`, output `dist`). `vercel.json` is already committed
+with the right settings.
+
+**Via the CLI:**
+
+```bash
+npm i -g vercel
+vercel          # preview
+vercel --prod   # production
+```
+
+**As a static build (no server):** run `npm run build` and upload the `dist/`
+folder to any static host.
+
+## Notes
+
+- The project images in `public/projects/` are resized to 600px wide WebP.
+  The originals from sobha.com are 500–1000px, which is wasted bandwidth for
+  textures that never display larger than ~600px.
+- `src/scene/quality.js` holds the GPU tiers. `src/scene/Scene.jsx` holds
+  the station layout and the camera rig.

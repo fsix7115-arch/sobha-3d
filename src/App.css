@@ -58,6 +58,48 @@ a {
   pointer-events: auto;
 }
 
+/* <Canvas fallback> renders as DOM inside the <canvas> tag. Keep it
+   invisible — it only exists so the element is never empty. */
+.canvas-fallback {
+  display: none;
+}
+
+/* Shown while the 3D chunk downloads — keeps the layout stable and the
+   page from flashing a blank background. */
+.stage-loading {
+  background:
+    radial-gradient(60% 45% at 72% 42%, rgba(75, 100, 160, 0.18), transparent 70%),
+    linear-gradient(180deg, #080a12, #06070c);
+}
+
+/* When WebGL is unavailable the page still needs to look designed.
+   This CSS-only tower stands in for the WebGL one. */
+.stage-fallback {
+  background:
+    radial-gradient(38% 30% at 74% 40%, rgba(183, 154, 77, 0.22), transparent 70%),
+    radial-gradient(60% 45% at 72% 42%, rgba(75, 100, 160, 0.16), transparent 72%),
+    linear-gradient(180deg, #080a12, #06070c);
+}
+
+.stage-fallback::after {
+  content: '';
+  position: absolute;
+  right: 12%;
+  bottom: 12%;
+  width: 22%;
+  height: 62%;
+  border: 1px solid rgba(183, 154, 77, 0.45);
+  border-radius: 3px 3px 0 0;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(183, 154, 77, 0.3) 0 1px,
+      transparent 1px 14px
+    ),
+    linear-gradient(160deg, rgba(40, 52, 84, 0.75), rgba(14, 17, 24, 0.9));
+  box-shadow: 0 0 90px -20px rgba(183, 154, 77, 0.5);
+}
+
 /* vignette + top/bottom scrim so copy stays legible over the 3D */
 .app::before {
   content: '';

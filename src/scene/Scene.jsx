@@ -1,6 +1,6 @@
-import { useRef, useMemo, Suspense } from 'react'
+import { useRef, useMemo, useState, useCallback, Suspense } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Float, Sparkles, Environment, Lightformer } from '@react-three/drei'
+import { Float, Sparkles, Environment, Lightformer, PerformanceMonitor } from '@react-three/drei'
 import * as THREE from 'three'
 import { Tower, Ground, Monolith, CityCluster, GOLD, GOLD_LIGHT } from './Objects.jsx'
 import ProjectShowcase from './ProjectShowcase.jsx'
@@ -46,45 +46,46 @@ function CameraRig({ station, frac }) {
   return null
 }
 
-function Lights() {
+/* Light budget matters more than anything else here: every lit material
+   evaluates every light in the scene per fragment. 27 lights (one rig per
+   station) collapsed the frame rate, so the station rig is a SINGLE set of
+   lights that travels to the active station instead of 5 static copies. */
+function Lights({ station = 0 }) {
+  const rig = useRef()
+  useFrame((state, delta) => {
+    if (!rig.current) return
+    const i = Math.min(STATIONS.length - 1, Math.max(0, Math.floor(station)))
+    const s = STATIONS[i]
+    const k = Math.min(1, delta * 2.5)
+    rig.current.position.x += (s.x * 0.5 - rig.current.position.x) * k
+    rig.current.position.z += (s.z - rig.current.position.z) * k
+  })
   return (
     <>
-      <ambientLight intensity={0.9} color="#8fa0c8" />
-      <hemisphereLight args={['#9fb4e8', '#1a1408', 0.7]} />
-      <directionalLight position={[6, 10, 6]} intensity={2.4} color="#fff6e0" />
-      <directionalLight position={[-7, 4, -5]} intensity={1.1} color="#6f8fd6" />
-      <pointLight position={[-6, 3, 4]} intensity={90} color={GOLD} distance={26} decay={1.6} />
-      <pointLight position={[6, 2, 2]} intensity={60} color="#6f8fd6" distance={24} decay={1.6} />
-      <pointLight position={[0, 12, 0]} intensity={70} color={GOLD_LIGHT} distance={20} decay={1.5} />
+      <ambientLight intensity={0.95} color="#93a4cc" />
+      <hemisphereLight args={['#9fb4e8', '#241c0c', 0.85]} />
+      <directionalLight position={[6, 10, 6]} intensity={2.3} color="#fff6e0" />
 
-      {/* one local light rig per station — the global lights fall off long
-          before reaching the scenes at z = -34, -68, -102, -134 */}
-      {STATIONS.map((s, i) => (
-        <group key={i} position={[s.x * 0.5, 0, s.z]}>
-          <pointLight
-            position={[0, 6, 6]}
-            intensity={110}
-            color={GOLD_LIGHT}
-            distance={22}
-            decay={1.4}
-          />
-          <pointLight position={[-6, 2, 5]} intensity={70} color={GOLD} distance={20} decay={1.4} />
-          <pointLight position={[6, 1, 4]} intensity={55} color="#7d9de0" distance={20} decay={1.4} />
-          <directionalLight position={[4, 7, 6]} intensity={1.6} color="#fff3dd" />
-        </group>
-      ))}
+      {/* the travelling station rig: 1 point + 1 fill = 2 lights, not 20 */}
+      <group ref={rig}>
+        <pointLight
+          position={[0, 6, 6]}
+          intensity={130}
+          color={GOLD_LIGHT}
+          distance={26}
+          decay={1.4}
+        />
+        <pointLight position={[-6, 2, 5]} intensity={80} color={GOLD} distance={24} decay={1.4} />
+      </group>
     </>
   )
 }
 
-/* Rendered when WebGL is unavailable, so the page never shows an empty box. */
+/* The `fallback` prop of <Canvas> is rendered as DOM content INSIDE the
+   <canvas> element — it must be plain HTML, not R3F elements. Passing a
+   <mesh> here makes React try to create a <mesh> DOM tag, which errors. */
 function SceneFallback() {
-  return (
-    <mesh>
-      <boxGeometry args={[1.4, 1.4, 1.4]} />
-      <meshBasicMaterial color={GOLD} />
-    </mesh>
-  )
+  return <span className="canvas-fallback" aria-hidden="true" />
 }
 
 export default function Scene({
@@ -105,11 +106,36 @@ export default function Scene({
   )
   const camera = useMemo(() => ({ position: [1.5, 1.4, 13], fov: 48 }), [])
 
+  /* Adaptive resolution: when the device cannot hold a usable frame rate,
+     drop the pixel ratio until it can, and climb back when it recovers.
+     This is what makes the site smooth on a weak laptop GPU instead of a
+     slideshow. */
+  const maxDpr = Array.isArray(q.dpr) ? q.dpr[1] : q.dpr
+  const [dpr, setDpr] = useState(q.dpr)
+  const onDecline = useCallback(() => {
+    setDpr((d) => Math.max(0.5, (Array.isArray(d) ? d[0] : d) - 0.25))
+  }, [])
+  const onIncline = useCallback(() => {
+    setDpr((d) => Math.min(maxDpr, (Array.isArray(d) ? d[0] : d) + 0.25))
+  }, [maxDpr])
+
+  /* Only the current station is rendered. The other scenes are 34+ units
+     away and invisible behind the fog, but they still cost draw calls and
+     shader work every frame.
+
+     IMPORTANT: mount conditionally, do NOT keep them mounted with
+     visible={false}. A mounted project ring calls useTexture, which
+     suspends; while that suspension is pending R3F's canvas root cannot
+     finish configuring, so onCreated never fires and the canvas stays at
+     the default 300x150. Remounting later is cheap because drei caches the
+     textures by URL — the promise resolves from cache, no refetch. */
+  const near = (z) => Math.abs(z - STATIONS[station].z) < 20
+
   return (
     <div className="stage" aria-hidden="true">
       <Canvas
         className="canvas"
-        dpr={q.dpr}
+        dpr={dpr}
         gl={gl}
         camera={camera}
         frameloop="always"
@@ -123,55 +149,71 @@ export default function Scene({
           window.__r3fError = String(e && (e.stack || e.message || e))
         }}
       >
+        <PerformanceMonitor
+          onDecline={onDecline}
+          onIncline={onIncline}
+          flipflops={4}
+          onFallback={() => setDpr(0.5)}
+        />
         <color attach="background" args={['#06070c']} />
         <fog attach="fog" args={['#06070c', 14, 46]} />
         {q.env && (
-          <Environment resolution={64} frames={1}>
+          <Environment resolution={32} frames={1}>
             <Lightformer form="rect" intensity={2.5} color="#ffffff" scale={[10, 10, 1]} position={[0, 8, 4]} rotation={[-Math.PI / 3, 0, 0]} />
             <Lightformer form="rect" intensity={1.4} color={GOLD} scale={[8, 4, 1]} position={[-6, 2, 3]} rotation={[0, Math.PI / 2, 0]} />
             <Lightformer form="rect" intensity={1.4} color="#e8cf94" scale={[8, 4, 1]} position={[6, 2, 3]} rotation={[0, -Math.PI / 2, 0]} />
             <Lightformer form="circle" intensity={1} color="#6d7fa8" scale={6} position={[0, -4, 2]} rotation={[Math.PI / 2, 0, 0]} />
           </Environment>
         )}
-        <Lights />
+        <Lights station={station} />
         {q.sparkles > 0 && (
           <Sparkles count={q.sparkles} scale={[26, 14, 120]} size={1.8} speed={0.25} color="#d8c493" />
         )}
 
-        <Tower position={[2.9, 0, 0]} quality={q} />
-        <Ground position={[2.9, 0, 0]} />
+        {near(0) && (
+          <>
+            <Tower position={[2.9, 0, 0]} quality={q} />
+            <Ground position={[2.9, 0, 0]} />
+          </>
+        )}
 
-        <Suspense fallback={null}>
-          <ProjectShowcase
-            projects={projects}
-            position={[0, 0.4, -34]}
-            active={activeProject}
-            onSelect={onSelectProject}
-            quality={q}
-          />
-        </Suspense>
+        {near(-34) && (
+          <Suspense fallback={null}>
+            <ProjectShowcase
+              projects={projects}
+              position={[0, 0.4, -34]}
+              active={activeProject}
+              onSelect={onSelectProject}
+              quality={q}
+            />
+          </Suspense>
+        )}
 
         {/* NOTE: the position goes on <Float> (the outer group), not on the
             child. Float rotates its INNER group, so a child placed at
             z=-68 inside it gets swung ~8 units off-axis by the rotation. */}
-        <Float speed={1.2} floatIntensity={0.8} rotationIntensity={0.4} position={[0, 0.4, -68]}>
-          <Monolith scale={2.6} />
-        </Float>
+        {near(-68) && (
+          <Float speed={1.2} floatIntensity={0.8} rotationIntensity={0.4} position={[0, 0.4, -68]}>
+            <Monolith scale={2.6} />
+          </Float>
+        )}
 
-        <CityCluster position={[0, 0, -102]} scale={1.8} />
+        {near(-102) && <CityCluster position={[0, 0, -102]} scale={1.8} />}
 
-        <Float speed={1.6} floatIntensity={1.2} rotationIntensity={0.5} position={[0, 0.6, -134]}>
-          <mesh scale={2.6}>
-            <icosahedronGeometry args={[1.5, 1]} />
-            <meshStandardMaterial
-              color="#2a3348"
-              metalness={0.9}
-              roughness={0.2}
-              emissive="#0d1120"
-              emissiveIntensity={1}
-            />
-          </mesh>
-        </Float>
+        {near(-134) && (
+          <Float speed={1.6} floatIntensity={1.2} rotationIntensity={0.5} position={[0, 0.6, -134]}>
+            <mesh scale={2.6}>
+              <icosahedronGeometry args={[1.5, 1]} />
+              <meshStandardMaterial
+                color="#2a3348"
+                metalness={0.9}
+                roughness={0.2}
+                emissive="#0d1120"
+                emissiveIntensity={1}
+              />
+            </mesh>
+          </Float>
+        )}
 
         <CameraRig station={station} frac={frac} />
       </Canvas>
