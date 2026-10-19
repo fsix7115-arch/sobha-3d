@@ -3,23 +3,27 @@ import Scene from './scene/Scene.jsx'
 import { detectQuality } from './scene/quality.js'
 import './App.css'
 
+/* Base-relative asset prefix so the site works when served from a
+   subpath (e.g. GitHub Pages at /sobha-3d/) as well as from a domain root. */
+const BASE = import.meta.env.BASE_URL
+
 /* ---------- real SOBHA project data (images pulled from sobha.com) ---------- */
 const PROJECTS = [
-  { slug: 'neopolis', name: 'SOBHA Neopolis', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: '/projects/neopolis.webp' },
-  { slug: 'bellevue', name: 'Bellevue by SOBHA', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: '/projects/bellevue.webp' },
-  { slug: 'woods', name: 'SOBHA Woods', city: 'Bengaluru', config: '4 Bed Residences', img: '/projects/woods.webp' },
-  { slug: 'strada', name: 'SOBHA Strada', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: '/projects/strada.webp' },
-  { slug: 'townpark', name: 'SOBHA Townpark', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: '/projects/townpark.webp' },
-  { slug: 'ayana', name: 'SOBHA Ayana', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: '/projects/ayana.webp' },
-  { slug: 'infinia', name: 'SOBHA Infinia', city: 'Bengaluru', config: '3 Bed Residences', img: '/projects/infinia.webp' },
-  { slug: 'elysia', name: 'SOBHA Elysia', city: 'GIFT City', config: '4 Bed Residences', img: '/projects/elysia.webp' },
-  { slug: 'aranya', name: 'SOBHA Aranya', city: 'Greater Noida', config: '4 & 5 Bed Residences', img: '/projects/aranya.webp' },
-  { slug: 'nesara', name: 'SOBHA Nesara', city: 'Pune', config: '3 & 4 Bed Residences', img: '/projects/nesara.webp' },
-  { slug: 'altus', name: 'SOBHA Altus', city: 'Gurugram', config: '3 & 4 Bed Residences', img: '/projects/altus.webp' },
-  { slug: 'atlantis', name: 'SOBHA Atlantis', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: '/projects/atlantis.webp' },
-  { slug: 'arbor', name: 'SOBHA Arbor', city: 'Chennai', config: '3 & 4 Bed Residences', img: '/projects/arbor.webp' },
-  { slug: 'insignia', name: 'SOBHA Insignia', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: '/projects/insignia.webp' },
-  { slug: 'royalcrest', name: 'Sobha Royal Crest', city: 'Thrissur', config: '3 & 4 Bed Residences', img: '/projects/royalcrest.webp' },
+  { slug: 'neopolis', name: 'SOBHA Neopolis', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: `${BASE}projects/neopolis.webp` },
+  { slug: 'bellevue', name: 'Bellevue by SOBHA', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: `${BASE}projects/bellevue.webp` },
+  { slug: 'woods', name: 'SOBHA Woods', city: 'Bengaluru', config: '4 Bed Residences', img: `${BASE}projects/woods.webp` },
+  { slug: 'strada', name: 'SOBHA Strada', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: `${BASE}projects/strada.webp` },
+  { slug: 'townpark', name: 'SOBHA Townpark', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: `${BASE}projects/townpark.webp` },
+  { slug: 'ayana', name: 'SOBHA Ayana', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: `${BASE}projects/ayana.webp` },
+  { slug: 'infinia', name: 'SOBHA Infinia', city: 'Bengaluru', config: '3 Bed Residences', img: `${BASE}projects/infinia.webp` },
+  { slug: 'elysia', name: 'SOBHA Elysia', city: 'GIFT City', config: '4 Bed Residences', img: `${BASE}projects/elysia.webp` },
+  { slug: 'aranya', name: 'SOBHA Aranya', city: 'Greater Noida', config: '4 & 5 Bed Residences', img: `${BASE}projects/aranya.webp` },
+  { slug: 'nesara', name: 'SOBHA Nesara', city: 'Pune', config: '3 & 4 Bed Residences', img: `${BASE}projects/nesara.webp` },
+  { slug: 'altus', name: 'SOBHA Altus', city: 'Gurugram', config: '3 & 4 Bed Residences', img: `${BASE}projects/altus.webp` },
+  { slug: 'atlantis', name: 'SOBHA Atlantis', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: `${BASE}projects/atlantis.webp` },
+  { slug: 'arbor', name: 'SOBHA Arbor', city: 'Chennai', config: '3 & 4 Bed Residences', img: `${BASE}projects/arbor.webp` },
+  { slug: 'insignia', name: 'SOBHA Insignia', city: 'Bengaluru', config: '3 & 4 Bed Residences', img: `${BASE}projects/insignia.webp` },
+  { slug: 'royalcrest', name: 'Sobha Royal Crest', city: 'Thrissur', config: '3 & 4 Bed Residences', img: `${BASE}projects/royalcrest.webp` },
 ]
 
 const CITIES = [
